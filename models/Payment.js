@@ -4,7 +4,11 @@ const PaymentSchema = new mongoose.Schema({
   eventId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Event',
-    required: true
+    default: null
+  },
+  note: {
+    type: String,
+    default: ''
   },
   supplierId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -22,7 +26,7 @@ const PaymentSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check'],
+    enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Loan'],
     required: true
   },
   date: {
