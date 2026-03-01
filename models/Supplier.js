@@ -11,6 +11,14 @@ const SupplierSchema = new mongoose.Schema({
   },
   contact_info: {
     type: String
+  },
+  default_price: {
+    type: Number,
+    default: 0
+  },
+  currency: {
+    type: String,
+    default: 'Shekel'
   }
 }, { timestamps: true });
 
