@@ -19,6 +19,17 @@ router.post('/', async (req, res) => {
   try {
     const newSupplier = new Supplier(req.body);
     const savedSupplier = await newSupplier.save();
+    
+    // Auto-link to partner if name matches
+    const Partner = require('../models/Partner');
+    const matchingPartner = await Partner.findOne({ name: savedSupplier.name });
+    if (matchingPartner) {
+      if (!matchingPartner.linkedSupplierIds.includes(savedSupplier._id)) {
+        matchingPartner.linkedSupplierIds.push(savedSupplier._id);
+        await matchingPartner.save();
+      }
+    }
+
     res.status(201).json(savedSupplier);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -29,6 +40,17 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const updatedSupplier = await Supplier.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    
+    // Auto-link to partner if name matches
+    const Partner = require('../models/Partner');
+    const matchingPartner = await Partner.findOne({ name: updatedSupplier.name });
+    if (matchingPartner) {
+      if (!matchingPartner.linkedSupplierIds.includes(updatedSupplier._id)) {
+        matchingPartner.linkedSupplierIds.push(updatedSupplier._id);
+        await matchingPartner.save();
+      }
+    }
+
     res.json(updatedSupplier);
   } catch (error) {
     res.status(400).json({ message: error.message });

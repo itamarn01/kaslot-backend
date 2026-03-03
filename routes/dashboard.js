@@ -52,7 +52,7 @@ router.get('/summary', async (req, res) => {
     };
 
     // Partner earnings calculation
-    const partners = await Partner.find().populate('linkedSupplierId');
+    const partners = await Partner.find().populate('linkedSupplierIds');
     const partnerEarnings = partners.map(partner => {
       let profitShare = { Shekel: 0, Dollar: 0, Euro: 0 };
       let supplierEarnings = { Shekel: 0, Dollar: 0, Euro: 0 };
@@ -68,11 +68,11 @@ router.get('/summary', async (req, res) => {
         // Partner's share of the profit
         profitShare[evCurrency] += eventProfit * (partner.percentage / 100);
 
-        // If partner is linked to a supplier, add their supplier pay from this event
-        if (partner.linkedSupplierId) {
-          const linkedId = partner.linkedSupplierId._id.toString();
+        // If partner is linked to suppliers, add their supplier pay from this event
+        if (partner.linkedSupplierIds && partner.linkedSupplierIds.length > 0) {
+          const linkedIds = partner.linkedSupplierIds.map(s => s._id.toString());
           (ev.participants || []).forEach(p => {
-            if (p.supplierId && p.supplierId.toString() === linkedId) {
+            if (p.supplierId && linkedIds.includes(p.supplierId.toString())) {
               const pCurrency = p.currency || 'Shekel';
               supplierEarnings[pCurrency] += (p.expectedPay || 0);
             }
@@ -84,7 +84,7 @@ router.get('/summary', async (req, res) => {
         _id: partner._id,
         name: partner.name,
         percentage: partner.percentage,
-        linkedSupplierName: partner.linkedSupplierId ? partner.linkedSupplierId.name : null,
+        linkedSupplierNames: partner.linkedSupplierIds ? partner.linkedSupplierIds.map(s => s.name).join(', ') : null,
         profitShare,
         supplierEarnings,
         totalEarnings: {

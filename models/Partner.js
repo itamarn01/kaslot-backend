@@ -11,11 +11,10 @@ const PartnerSchema = new mongoose.Schema({
     min: 0,
     max: 100
   },
-  linkedSupplierId: {
+  linkedSupplierIds: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Supplier',
-    default: null
-  }
+    ref: 'Supplier'
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Partner', PartnerSchema);

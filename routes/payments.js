@@ -8,9 +8,11 @@ router.get('/', async (req, res) => {
     const filter = {};
     if (req.query.eventId) filter.eventId = req.query.eventId;
     if (req.query.supplierId) filter.supplierId = req.query.supplierId;
+    if (req.query.partnerId) filter.partnerId = req.query.partnerId;
     
     const payments = await Payment.find(filter)
       .populate('supplierId', 'name')
+      .populate('partnerId', 'name')
       .populate('eventId', 'title')
       .sort({ date: -1 });
     res.json(payments);
