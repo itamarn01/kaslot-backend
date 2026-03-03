@@ -42,6 +42,7 @@ app.get('/', (req, res) => {
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/partners', require('./routes/partners'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 app.listen(PORT, () => {

@@ -3,6 +3,7 @@ const router = express.Router();
 const Event = require('../models/Event');
 const Payment = require('../models/Payment');
 const Supplier = require('../models/Supplier');
+const Partner = require('../models/Partner');
 
 router.get('/summary', async (req, res) => {
   try {
@@ -47,11 +48,52 @@ router.get('/summary', async (req, res) => {
     const estimatedFinalProfit = {
         Shekel: totalEventsPrice.Shekel - totalExpectedPay.Shekel,
         Dollar: totalEventsPrice.Dollar - totalExpectedPay.Dollar,
-        Euro: totalEventsPrice.Euro - totalExpectedPay.Euro, // Corrected logic based on cash in vs out wasn't accurate before, but we'll adapt to currency 
+        Euro: totalEventsPrice.Euro - totalExpectedPay.Euro,
     };
 
-    // Calculate profit dynamically based on (Total collected vs Payments) can be tricky if payments to players exceed total events price in that currency
-    // For now, we will simply pass the raw object breakdowns
+    // Partner earnings calculation
+    const partners = await Partner.find().populate('linkedSupplierId');
+    const partnerEarnings = partners.map(partner => {
+      let profitShare = { Shekel: 0, Dollar: 0, Euro: 0 };
+      let supplierEarnings = { Shekel: 0, Dollar: 0, Euro: 0 };
+
+      events.forEach(ev => {
+        const evCurrency = ev.currency || 'Shekel';
+        // Calculate event profit (revenue - supplier costs in event currency)
+        const eventSupplierCosts = (ev.participants || [])
+          .filter(p => (p.currency || 'Shekel') === evCurrency)
+          .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
+        const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
+
+        // Partner's share of the profit
+        profitShare[evCurrency] += eventProfit * (partner.percentage / 100);
+
+        // If partner is linked to a supplier, add their supplier pay from this event
+        if (partner.linkedSupplierId) {
+          const linkedId = partner.linkedSupplierId._id.toString();
+          (ev.participants || []).forEach(p => {
+            if (p.supplierId && p.supplierId.toString() === linkedId) {
+              const pCurrency = p.currency || 'Shekel';
+              supplierEarnings[pCurrency] += (p.expectedPay || 0);
+            }
+          });
+        }
+      });
+
+      return {
+        _id: partner._id,
+        name: partner.name,
+        percentage: partner.percentage,
+        linkedSupplierName: partner.linkedSupplierId ? partner.linkedSupplierId.name : null,
+        profitShare,
+        supplierEarnings,
+        totalEarnings: {
+          Shekel: profitShare.Shekel + supplierEarnings.Shekel,
+          Dollar: profitShare.Dollar + supplierEarnings.Dollar,
+          Euro: profitShare.Euro + supplierEarnings.Euro,
+        }
+      };
+    });
 
     res.json({
       totalEvents: events.length,
@@ -60,7 +102,8 @@ router.get('/summary', async (req, res) => {
       totalPaymentsMade,
       totalProfit,
       totalOwed,
-      estimatedFinalProfit
+      estimatedFinalProfit,
+      partnerEarnings
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -68,3 +111,4 @@ router.get('/summary', async (req, res) => {
 });
 
 module.exports = router;
+
