@@ -44,6 +44,9 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/partners', require('./routes/partners'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/google', require('./routes/google'));
+app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/data', require('./routes/data'));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

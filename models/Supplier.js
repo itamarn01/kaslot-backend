@@ -12,6 +12,9 @@ const SupplierSchema = new mongoose.Schema({
   contact_info: {
     type: String
   },
+  email: {
+    type: String
+  },
   default_price: {
     type: Number,
     default: 0
