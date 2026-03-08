@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const Payment = require('../models/Payment');
+const { authMiddleware } = require('../middleware/auth');
+
+// All routes require authentication
+router.use(authMiddleware);
 
 // Get all payments or payments for a specific event / supplier
 router.get('/', async (req, res) => {
   try {
-    const filter = {};
+    const filter = { userId: req.userId };
     if (req.query.eventId) filter.eventId = req.query.eventId;
     if (req.query.supplierId) filter.supplierId = req.query.supplierId;
     if (req.query.partnerId) filter.partnerId = req.query.partnerId;
@@ -24,7 +28,7 @@ router.get('/', async (req, res) => {
 // Create a payment
 router.post('/', async (req, res) => {
   try {
-    const newPayment = new Payment(req.body);
+    const newPayment = new Payment({ ...req.body, userId: req.userId });
     const savedPayment = await newPayment.save();
     res.status(201).json(savedPayment);
   } catch (error) {
@@ -35,7 +39,7 @@ router.post('/', async (req, res) => {
 // Delete a payment
 router.delete('/:id', async (req, res) => {
   try {
-    await Payment.findByIdAndDelete(req.params.id);
+    await Payment.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     res.json({ message: 'Payment deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

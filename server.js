@@ -39,6 +39,7 @@ app.get('/', (req, res) => {
 });
 
 // Import Routes
+app.use('/api/auth', require('./routes/auth'));
 app.use('/api/suppliers', require('./routes/suppliers'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/payments', require('./routes/payments'));

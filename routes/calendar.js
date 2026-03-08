@@ -4,26 +4,29 @@ const { google } = require('googleapis');
 const Event = require('../models/Event');
 const Supplier = require('../models/Supplier');
 const { getAuthenticatedClient } = require('./google');
+const { authMiddleware } = require('../middleware/auth');
+
+// All routes require authentication
+router.use(authMiddleware);
 
 // Send Google Calendar invitation for an event
 router.post('/send-invite', async (req, res) => {
   try {
     const { eventId, supplierIds } = req.body;
 
-    // Check Google connection
-    const auth = getAuthenticatedClient();
+    // Check Google connection (now per-user)
+    const auth = await getAuthenticatedClient(req.userId);
     if (!auth) {
       return res.status(401).json({ message: 'Google account not connected. Go to Settings to connect.' });
     }
 
-    // Get event with populated participants
-    const event = await Event.findById(eventId).populate('participants.supplierId');
+    // Get event with populated participants (scoped to user)
+    const event = await Event.findOne({ _id: eventId, userId: req.userId }).populate('participants.supplierId');
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
     // Determine which suppliers to invite
     let suppliersToInvite = [];
     if (supplierIds && supplierIds.length > 0) {
-      // Invite specific suppliers
       for (const sid of supplierIds) {
         const supplier = await Supplier.findById(sid);
         if (supplier && supplier.email) {
@@ -31,7 +34,6 @@ router.post('/send-invite', async (req, res) => {
         }
       }
     } else {
-      // Invite all participants with email
       for (const p of event.participants) {
         const supplier = await Supplier.findById(p.supplierId._id || p.supplierId);
         if (supplier && supplier.email) {
@@ -46,24 +48,20 @@ router.post('/send-invite', async (req, res) => {
 
     const calendar = google.calendar({ version: 'v3', auth });
 
-    // Build event date (set to full day if no specific time)
     const eventDate = new Date(event.date);
     const startDateTime = eventDate.toISOString();
     const endDate = new Date(eventDate);
-    endDate.setHours(endDate.getHours() + 4); // Default 4 hour event
+    endDate.setHours(endDate.getHours() + 4);
     const endDateTime = endDate.toISOString();
 
-    // Currency symbol
     const currSymbol = event.currency === 'Dollar' ? '$' : event.currency === 'Euro' ? '€' : '₪';
 
-    // Build description with event details
     let description = `🎵 אירוע: ${event.title}\n`;
     description += `📅 תאריך: ${eventDate.toLocaleDateString('he-IL')}\n`;
     if (event.location) description += `📍 מיקום: ${event.location}\n`;
     if (event.phone_number) description += `📞 טלפון בעל אירוע: ${event.phone_number}\n`;
     description += `\n--- פרטי שכר ---\n`;
 
-    // Add individual pay info per supplier in description
     for (const supplier of suppliersToInvite) {
       const participant = event.participants.find(
         p => (p.supplierId._id || p.supplierId).toString() === supplier._id.toString()
@@ -85,11 +83,11 @@ router.post('/send-invite', async (req, res) => {
       reminders: {
         useDefault: false,
         overrides: [
-          { method: 'email', minutes: 24 * 60 }, // 1 day before
-          { method: 'popup', minutes: 60 },       // 1 hour before
+          { method: 'email', minutes: 24 * 60 },
+          { method: 'popup', minutes: 60 },
         ],
       },
-      sendUpdates: 'all', // Send email notifications to attendees
+      sendUpdates: 'all',
     };
 
     const result = await calendar.events.insert({

@@ -4,12 +4,15 @@ const Event = require('../models/Event');
 const Payment = require('../models/Payment');
 const Supplier = require('../models/Supplier');
 const Partner = require('../models/Partner');
+const { authMiddleware } = require('../middleware/auth');
+
+// All routes require authentication
+router.use(authMiddleware);
 
 router.get('/summary', async (req, res) => {
   try {
-    const events = await Event.find();
+    const events = await Event.find({ userId: req.userId });
     
-    // Using objects to store sums per currency
     const totalEventsPrice = { Shekel: 0, Dollar: 0, Euro: 0 };
     const totalExpectedPay = { Shekel: 0, Dollar: 0, Euro: 0 };
     
@@ -25,7 +28,7 @@ router.get('/summary', async (req, res) => {
       }
     });
 
-    const payments = await Payment.find();
+    const payments = await Payment.find({ userId: req.userId });
     
     const totalPaymentsMade = { Shekel: 0, Dollar: 0, Euro: 0 };
     payments.forEach(p => {
@@ -51,24 +54,20 @@ router.get('/summary', async (req, res) => {
         Euro: totalEventsPrice.Euro - totalExpectedPay.Euro,
     };
 
-    // Partner earnings calculation
-    const partners = await Partner.find().populate('linkedSupplierIds');
+    const partners = await Partner.find({ userId: req.userId }).populate('linkedSupplierIds');
     const partnerEarnings = partners.map(partner => {
       let profitShare = { Shekel: 0, Dollar: 0, Euro: 0 };
       let supplierEarnings = { Shekel: 0, Dollar: 0, Euro: 0 };
 
       events.forEach(ev => {
         const evCurrency = ev.currency || 'Shekel';
-        // Calculate event profit (revenue - supplier costs in event currency)
         const eventSupplierCosts = (ev.participants || [])
           .filter(p => (p.currency || 'Shekel') === evCurrency)
           .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
         const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
 
-        // Partner's share of the profit
         profitShare[evCurrency] += eventProfit * (partner.percentage / 100);
 
-        // If partner is linked to suppliers, add their supplier pay from this event
         if (partner.linkedSupplierIds && partner.linkedSupplierIds.length > 0) {
           const linkedIds = partner.linkedSupplierIds.map(s => s._id.toString());
           (ev.participants || []).forEach(p => {
@@ -111,4 +110,3 @@ router.get('/summary', async (req, res) => {
 });
 
 module.exports = router;
-
