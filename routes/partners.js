@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const Partner = require('../models/Partner');
+const { authMiddleware } = require('../middleware/auth');
 
-// GET all partners
+// All routes require authentication
+router.use(authMiddleware);
+
+// GET all partners (for current user)
 router.get('/', async (req, res) => {
   try {
-    const partners = await Partner.find().populate('linkedSupplierIds');
+    const partners = await Partner.find({ userId: req.userId }).populate('linkedSupplierIds');
     res.json(partners);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -18,7 +22,7 @@ router.post('/', async (req, res) => {
     const { name, percentage, linkedSupplierIds } = req.body;
 
     // Validate total percentage won't exceed 100
-    const existingPartners = await Partner.find();
+    const existingPartners = await Partner.find({ userId: req.userId });
     const currentTotal = existingPartners.reduce((sum, p) => sum + p.percentage, 0);
     if (currentTotal + percentage > 100) {
       return res.status(400).json({
@@ -26,20 +30,16 @@ router.post('/', async (req, res) => {
       });
     }
 
-    const { Supplier } = require('../models/Supplier'); // if needed, but we can just require it at the top
-    
-    // Find suppliers with matching exact name
     const SupplierModel = require('../models/Supplier');
-    const autoLinkedSuppliers = await SupplierModel.find({ name: name });
+    const autoLinkedSuppliers = await SupplierModel.find({ name: name, userId: req.userId });
     const autoLinkedIds = autoLinkedSuppliers.map(s => s._id.toString());
     
-    // Combine explicit and auto-linked
     let combinedIds = Array.isArray(linkedSupplierIds) ? linkedSupplierIds.map(id => id.toString()) : [];
     autoLinkedIds.forEach(id => {
       if (!combinedIds.includes(id)) combinedIds.push(id);
     });
 
-    const partner = new Partner({ name, percentage, linkedSupplierIds: combinedIds });
+    const partner = new Partner({ name, percentage, linkedSupplierIds: combinedIds, userId: req.userId });
     await partner.save();
     const populated = await Partner.findById(partner._id).populate('linkedSupplierIds');
     res.status(201).json(populated);
@@ -53,8 +53,7 @@ router.put('/:id', async (req, res) => {
   try {
     const { name, percentage, linkedSupplierIds } = req.body;
 
-    // Validate total percentage won't exceed 100 (excluding current partner)
-    const existingPartners = await Partner.find({ _id: { $ne: req.params.id } });
+    const existingPartners = await Partner.find({ _id: { $ne: req.params.id }, userId: req.userId });
     const currentTotal = existingPartners.reduce((sum, p) => sum + p.percentage, 0);
     if (currentTotal + percentage > 100) {
       return res.status(400).json({
@@ -62,19 +61,17 @@ router.put('/:id', async (req, res) => {
       });
     }
 
-    // Find suppliers with matching exact name
     const SupplierModel = require('../models/Supplier');
-    const autoLinkedSuppliers = await SupplierModel.find({ name: name });
+    const autoLinkedSuppliers = await SupplierModel.find({ name: name, userId: req.userId });
     const autoLinkedIds = autoLinkedSuppliers.map(s => s._id.toString());
     
-    // Combine explicit and auto-linked
     let combinedIds = Array.isArray(linkedSupplierIds) ? linkedSupplierIds.map(id => id.toString()) : [];
     autoLinkedIds.forEach(id => {
       if (!combinedIds.includes(id)) combinedIds.push(id);
     });
 
-    const partner = await Partner.findByIdAndUpdate(
-      req.params.id,
+    const partner = await Partner.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { name, percentage, linkedSupplierIds: combinedIds },
       { new: true }
     ).populate('linkedSupplierIds');
@@ -89,7 +86,7 @@ router.put('/:id', async (req, res) => {
 // DELETE partner
 router.delete('/:id', async (req, res) => {
   try {
-    const partner = await Partner.findByIdAndDelete(req.params.id);
+    const partner = await Partner.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!partner) return res.status(404).json({ message: 'שותף לא נמצא' });
     res.json({ message: 'השותף נמחק בהצלחה' });
   } catch (error) {
@@ -97,7 +94,7 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET partner report
+// GET partner report (public for sharing)
 router.get('/:id/report', async (req, res) => {
   try {
     const partner = await Partner.findById(req.params.id).populate('linkedSupplierIds');
@@ -105,7 +102,7 @@ router.get('/:id/report', async (req, res) => {
 
     const Event = require('../models/Event');
     const Payment = require('../models/Payment');
-    const events = await Event.find().sort({ date: -1 });
+    const events = await Event.find({ userId: partner.userId }).sort({ date: -1 });
 
     const eventsWithParticipant = [];
     const totalExpected = { Shekel: 0, Dollar: 0, Euro: 0 };
@@ -124,19 +121,16 @@ router.get('/:id/report', async (req, res) => {
       const linkedIds = partner.linkedSupplierIds ? partner.linkedSupplierIds.map(s => s._id.toString()) : [];
       (ev.participants || []).forEach(p => {
         if (p.supplierId && linkedIds.includes(p.supplierId.toString())) {
-          // Add supplier earning (only supporting matching currency for simplicity, or we separate them)
           const pCurrency = p.currency || 'Shekel';
           if (pCurrency === evCurrency) {
              supplierEarnings += (p.expectedPay || 0);
              hasSupplierEarning = true;
           } else {
-             // If different currency, just add it to totalExpected for that currency but for reporting per event we keep it simple
              totalExpected[pCurrency] = (totalExpected[pCurrency] || 0) + (p.expectedPay || 0);
           }
         }
       });
 
-      // If partner earned anything from this event
       if (partnerShare > 0 || hasSupplierEarning) {
          eventsWithParticipant.push({
            _id: ev._id,

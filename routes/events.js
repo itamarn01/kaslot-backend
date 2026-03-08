@@ -2,11 +2,15 @@ const express = require('express');
 const router = express.Router();
 const Event = require('../models/Event');
 const Payment = require('../models/Payment');
+const { authMiddleware } = require('../middleware/auth');
 
-// Get all events
+// All routes require authentication
+router.use(authMiddleware);
+
+// Get all events (for current user)
 router.get('/', async (req, res) => {
   try {
-    const events = await Event.find()
+    const events = await Event.find({ userId: req.userId })
       .populate('participants.supplierId', 'name role')
       .sort({ date: -1 });
     res.json(events);
@@ -18,7 +22,8 @@ router.get('/', async (req, res) => {
 // Get single event
 router.get('/:id', async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).populate('participants.supplierId', 'name role contact_info');
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId })
+      .populate('participants.supplierId', 'name role contact_info');
     if (!event) return res.status(404).json({ message: 'Event not found' });
     res.json(event);
   } catch (error) {
@@ -29,7 +34,7 @@ router.get('/:id', async (req, res) => {
 // Create an event
 router.post('/', async (req, res) => {
   try {
-    const newEvent = new Event(req.body);
+    const newEvent = new Event({ ...req.body, userId: req.userId });
     const savedEvent = await newEvent.save();
     res.status(201).json(savedEvent);
   } catch (error) {
@@ -40,7 +45,11 @@ router.post('/', async (req, res) => {
 // Update an event
 router.put('/:id', async (req, res) => {
   try {
-    const updatedEvent = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updatedEvent = await Event.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      req.body,
+      { new: true }
+    );
     res.json(updatedEvent);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -50,8 +59,8 @@ router.put('/:id', async (req, res) => {
 // Delete an event
 router.delete('/:id', async (req, res) => {
   try {
-    await Event.findByIdAndDelete(req.params.id);
-    await Payment.deleteMany({ eventId: req.params.id });
+    await Event.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+    await Payment.deleteMany({ eventId: req.params.id, userId: req.userId });
     res.json({ message: 'Event deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -62,10 +71,9 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/participants', async (req, res) => {
   try {
     const { supplierId, expectedPay, currency } = req.body;
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
     
-    // Check if supplier already in event
     const exists = event.participants.find(p => p.supplierId.toString() === supplierId);
     if (exists) return res.status(400).json({ message: 'Supplier already added to this event' });
 
@@ -82,14 +90,13 @@ router.post('/:id/participants', async (req, res) => {
 // Remove participant from event
 router.delete('/:id/participants/:supplierId', async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
     
     event.participants = event.participants.filter(p => p.supplierId.toString() !== req.params.supplierId);
     await event.save();
     
-    // Delete payments related to this supplier for this event
-    await Payment.deleteMany({ eventId: req.params.id, supplierId: req.params.supplierId });
+    await Payment.deleteMany({ eventId: req.params.id, supplierId: req.params.supplierId, userId: req.userId });
     
     res.json(event);
   } catch (error) {
@@ -101,7 +108,7 @@ router.delete('/:id/participants/:supplierId', async (req, res) => {
 router.put('/:id/participants/:supplierId', async (req, res) => {
   try {
     const { expectedPay, currency } = req.body;
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
     
     const participant = event.participants.find(p => p.supplierId.toString() === req.params.supplierId);
