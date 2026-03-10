@@ -6,17 +6,25 @@ const { generateCode, sendVerificationEmail, sendResetPasswordEmail } = require(
 const bcrypt = require('bcryptjs');
 const { google } = require('googleapis');
 
-function getOAuth2Client() {
+function getOAuth2Client(req) {
+  // prioritize explicit redirect URI from env, then fall back to dynamic generation from host or backend_url
+  let redirectUri = process.env.GOOGLE_AUTH_REDIRECT_URI;
+  
+  if (!redirectUri) {
+    const baseUrl = process.env.BACKEND_URL || (req ? `${req.protocol}://${req.get('host')}` : 'http://localhost:5000');
+    redirectUri = `${baseUrl}/api/auth/google/callback`;
+  }
+
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_AUTH_REDIRECT_URI || `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/google/callback`
+    redirectUri
   );
 }
 
 // ─── GOOGLE OAUTH URL (for sign-in/register) ───
 router.get('/google/url', (req, res) => {
-  const oauth2Client = getOAuth2Client();
+  const oauth2Client = getOAuth2Client(req);
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: [
@@ -38,7 +46,7 @@ router.get('/google/callback', async (req, res) => {
   }
 
   try {
-    const oauth2Client = getOAuth2Client();
+    const oauth2Client = getOAuth2Client(req);
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 
