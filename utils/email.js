@@ -3,7 +3,7 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.SMTP_EMAIL || 'kolotband@gmail.com',
+    user: process.env.SMTP_EMAIL || 'kolotmusic@gmail.com',
     pass: process.env.SMTP_PASSWORD // App Password from Google
   }
 });
@@ -16,7 +16,7 @@ function generateCode() {
 // Send verification email
 async function sendVerificationEmail(toEmail, code, userName) {
   const mailOptions = {
-    from: `"Kaslot" <${process.env.SMTP_EMAIL || 'kolotband@gmail.com'}>`,
+    from: `"Kaslot" <${process.env.SMTP_EMAIL || 'kolotmusic@gmail.com'}>`,
     to: toEmail,
     subject: '🔐 אימות חשבון Kaslot - קוד אימות',
     html: `
@@ -43,7 +43,7 @@ async function sendVerificationEmail(toEmail, code, userName) {
 // Send password reset email
 async function sendResetPasswordEmail(toEmail, code, userName) {
   const mailOptions = {
-    from: `"Kaslot" <${process.env.SMTP_EMAIL || 'kolotband@gmail.com'}>`,
+    from: `"Kaslot" <${process.env.SMTP_EMAIL || 'kolotmusic@gmail.com'}>`,
     to: toEmail,
     subject: '🔑 איפוס סיסמה - Kaslot',
     html: `
