@@ -4,6 +4,76 @@ const User = require('../models/User');
 const { generateToken, authMiddleware } = require('../middleware/auth');
 const { generateCode, sendVerificationEmail, sendResetPasswordEmail } = require('../utils/email');
 const bcrypt = require('bcryptjs');
+const { google } = require('googleapis');
+
+function getOAuth2Client() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_AUTH_REDIRECT_URI || `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/auth/google/callback`
+  );
+}
+
+// ─── GOOGLE OAUTH URL (for sign-in/register) ───
+router.get('/google/url', (req, res) => {
+  const oauth2Client = getOAuth2Client();
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: [
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+    ],
+    prompt: 'select_account',
+  });
+  res.json({ url });
+});
+
+// ─── GOOGLE OAUTH CALLBACK (for sign-in/register) ───
+router.get('/google/callback', async (req, res) => {
+  const { code, error } = req.query;
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+  if (error || !code) {
+    return res.redirect(`${frontendUrl}/auth?error=google_cancelled`);
+  }
+
+  try {
+    const oauth2Client = getOAuth2Client();
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+
+    // Get user info from Google
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const { data: googleUser } = await oauth2.userinfo.get();
+
+    const { id: googleId, email, name } = googleUser;
+
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
+
+    if (user) {
+      if (!user.googleId) user.googleId = googleId;
+      if (!user.isVerified) user.isVerified = true;
+      // Store google auth tokens on the user for future calendar use if not already set
+      await user.save();
+    } else {
+      user = new User({
+        name: name || email.split('@')[0],
+        email,
+        googleId,
+        authProvider: 'google',
+        isVerified: true,
+      });
+      await user.save();
+    }
+
+    const token = generateToken(user._id);
+    // Redirect to frontend with token
+    res.redirect(`${frontendUrl}/auth?token=${token}&name=${encodeURIComponent(user.name)}&email=${encodeURIComponent(user.email)}&provider=google&userId=${user._id}`);
+  } catch (err) {
+    console.error('Google auth callback error:', err);
+    res.redirect(`${frontendUrl}/auth?error=google_failed`);
+  }
+});
 
 // ─── REGISTER ───
 router.post('/register', async (req, res) => {
