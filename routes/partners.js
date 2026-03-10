@@ -109,18 +109,30 @@ router.get('/:id/report', async (req, res) => {
     
     events.forEach(ev => {
       const evCurrency = ev.currency || 'Shekel';
+      // Only non-substitute suppliers reduce the shared profit pool
       const eventSupplierCosts = (ev.participants || [])
-        .filter(p => (p.currency || 'Shekel') === evCurrency)
+        .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
         .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
       const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
 
       let partnerShare = eventProfit * (partner.percentage / 100);
       let supplierEarnings = 0;
+      let substituteDeduction = 0;
       let hasSupplierEarning = false;
+
+      // Deduct substitute costs that replace THIS partner
+      (ev.participants || []).forEach(p => {
+        if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
+          const pCurrency = p.currency || 'Shekel';
+          if (pCurrency === evCurrency) {
+            substituteDeduction += (p.expectedPay || 0);
+          }
+        }
+      });
 
       const linkedIds = partner.linkedSupplierIds ? partner.linkedSupplierIds.map(s => s._id.toString()) : [];
       (ev.participants || []).forEach(p => {
-        if (p.supplierId && linkedIds.includes(p.supplierId.toString())) {
+        if (p.supplierId && linkedIds.includes(p.supplierId.toString()) && !p.isSubstitute) {
           const pCurrency = p.currency || 'Shekel';
           if (pCurrency === evCurrency) {
              supplierEarnings += (p.expectedPay || 0);
@@ -131,7 +143,8 @@ router.get('/:id/report', async (req, res) => {
         }
       });
 
-      if (partnerShare > 0 || hasSupplierEarning) {
+      if (partnerShare > 0 || hasSupplierEarning || substituteDeduction > 0) {
+         const netEarning = partnerShare + supplierEarnings - substituteDeduction;
          eventsWithParticipant.push({
            _id: ev._id,
            title: ev.title,
@@ -139,10 +152,11 @@ router.get('/:id/report', async (req, res) => {
            location: ev.location,
            partnerShare,
            supplierEarnings,
-           expectedPay: partnerShare + supplierEarnings,
+           substituteDeduction,
+           expectedPay: netEarning,
            currency: evCurrency
          });
-         totalExpected[evCurrency] = (totalExpected[evCurrency] || 0) + partnerShare + supplierEarnings;
+         totalExpected[evCurrency] = (totalExpected[evCurrency] || 0) + netEarning;
       }
     });
 

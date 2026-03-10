@@ -70,14 +70,20 @@ router.delete('/:id', async (req, res) => {
 // Add participant to event
 router.post('/:id/participants', async (req, res) => {
   try {
-    const { supplierId, expectedPay, currency } = req.body;
+    const { supplierId, expectedPay, currency, isSubstitute, replacesPartnerId } = req.body;
     const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
     
     const exists = event.participants.find(p => p.supplierId.toString() === supplierId);
     if (exists) return res.status(400).json({ message: 'Supplier already added to this event' });
 
-    event.participants.push({ supplierId, expectedPay, currency });
+    const participantData = { supplierId, expectedPay, currency };
+    if (isSubstitute) {
+      participantData.isSubstitute = true;
+      participantData.replacesPartnerId = replacesPartnerId || null;
+    }
+
+    event.participants.push(participantData);
     await event.save();
     
     const updatedEvent = await Event.findById(req.params.id).populate('participants.supplierId', 'name role');
@@ -107,7 +113,7 @@ router.delete('/:id/participants/:supplierId', async (req, res) => {
 // Update participant in event
 router.put('/:id/participants/:supplierId', async (req, res) => {
   try {
-    const { expectedPay, currency } = req.body;
+    const { expectedPay, currency, isSubstitute, replacesPartnerId } = req.body;
     const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
     
@@ -116,6 +122,10 @@ router.put('/:id/participants/:supplierId', async (req, res) => {
 
     if (expectedPay !== undefined) participant.expectedPay = expectedPay;
     if (currency !== undefined) participant.currency = currency;
+    if (isSubstitute !== undefined) {
+      participant.isSubstitute = isSubstitute;
+      participant.replacesPartnerId = isSubstitute ? (replacesPartnerId || null) : null;
+    }
 
     await event.save();
     

@@ -58,20 +58,30 @@ router.get('/summary', async (req, res) => {
     const partnerEarnings = partners.map(partner => {
       let profitShare = { Shekel: 0, Dollar: 0, Euro: 0 };
       let supplierEarnings = { Shekel: 0, Dollar: 0, Euro: 0 };
+      let substituteDeductions = { Shekel: 0, Dollar: 0, Euro: 0 };
 
       events.forEach(ev => {
         const evCurrency = ev.currency || 'Shekel';
+        // Only non-substitute suppliers reduce the shared profit pool
         const eventSupplierCosts = (ev.participants || [])
-          .filter(p => (p.currency || 'Shekel') === evCurrency)
+          .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
           .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
         const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
 
         profitShare[evCurrency] += eventProfit * (partner.percentage / 100);
 
+        // Deduct substitute costs that replace THIS partner
+        (ev.participants || []).forEach(p => {
+          if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
+            const pCurrency = p.currency || 'Shekel';
+            substituteDeductions[pCurrency] += (p.expectedPay || 0);
+          }
+        });
+
         if (partner.linkedSupplierIds && partner.linkedSupplierIds.length > 0) {
           const linkedIds = partner.linkedSupplierIds.map(s => s._id.toString());
           (ev.participants || []).forEach(p => {
-            if (p.supplierId && linkedIds.includes(p.supplierId.toString())) {
+            if (p.supplierId && linkedIds.includes(p.supplierId.toString()) && !p.isSubstitute) {
               const pCurrency = p.currency || 'Shekel';
               supplierEarnings[pCurrency] += (p.expectedPay || 0);
             }
@@ -86,10 +96,11 @@ router.get('/summary', async (req, res) => {
         linkedSupplierNames: partner.linkedSupplierIds ? partner.linkedSupplierIds.map(s => s.name).join(', ') : null,
         profitShare,
         supplierEarnings,
+        substituteDeductions,
         totalEarnings: {
-          Shekel: profitShare.Shekel + supplierEarnings.Shekel,
-          Dollar: profitShare.Dollar + supplierEarnings.Dollar,
-          Euro: profitShare.Euro + supplierEarnings.Euro,
+          Shekel: profitShare.Shekel + supplierEarnings.Shekel - substituteDeductions.Shekel,
+          Dollar: profitShare.Dollar + supplierEarnings.Dollar - substituteDeductions.Dollar,
+          Euro: profitShare.Euro + supplierEarnings.Euro - substituteDeductions.Euro,
         }
       };
     });
