@@ -4,11 +4,18 @@ const { google } = require('googleapis');
 const User = require('../models/User');
 const { authMiddleware } = require('../middleware/auth');
 
-function getOAuth2Client() {
+function getOAuth2Client(req) {
+  let redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  
+  if (!redirectUri) {
+    const baseUrl = process.env.BACKEND_URL || (req ? `${req.protocol}://${req.get('host')}` : 'http://localhost:5000');
+    redirectUri = `${baseUrl}/api/google/callback`;
+  }
+
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    redirectUri
   );
 }
 
@@ -34,7 +41,7 @@ async function getAuthenticatedClient(userId) {
 
 // Get Google OAuth URL (requires auth to know which user)
 router.get('/auth-url', authMiddleware, (req, res) => {
-  const oauth2Client = getOAuth2Client();
+  const oauth2Client = getOAuth2Client(req);
   const scopes = [
     'https://www.googleapis.com/auth/calendar.events',
     'https://www.googleapis.com/auth/spreadsheets',
@@ -54,7 +61,7 @@ router.get('/callback', async (req, res) => {
   if (!code) return res.status(400).send('Missing authorization code');
 
   try {
-    const oauth2Client = getOAuth2Client();
+    const oauth2Client = getOAuth2Client(req);
     const { tokens } = await oauth2Client.getToken(code);
 
     // Save tokens to user document
