@@ -43,6 +43,15 @@ const EventSchema = new mongoose.Schema({
       type: String,
       enum: ['Shekel', 'Dollar', 'Euro'],
       default: 'Shekel'
+    },
+    isSubstitute: {
+      type: Boolean,
+      default: false
+    },
+    replacesPartnerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Partner',
+      default: null
     }
   }]
 }, { timestamps: true });

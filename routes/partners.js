@@ -102,7 +102,9 @@ router.get('/:id/report', async (req, res) => {
 
     const Event = require('../models/Event');
     const Payment = require('../models/Payment');
-    const events = await Event.find({ userId: partner.userId }).sort({ date: -1 });
+    const events = await Event.find({ userId: partner.userId })
+      .populate('participants.supplierId', 'name role')
+      .sort({ date: -1 });
 
     const eventsWithParticipant = [];
     const totalExpected = { Shekel: 0, Dollar: 0, Euro: 0 };
@@ -110,17 +112,36 @@ router.get('/:id/report', async (req, res) => {
     events.forEach(ev => {
       const evCurrency = ev.currency || 'Shekel';
       const eventSupplierCosts = (ev.participants || [])
-        .filter(p => (p.currency || 'Shekel') === evCurrency)
+        .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
         .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
       const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
 
       let partnerShare = eventProfit * (partner.percentage / 100);
       let supplierEarnings = 0;
+      let substituteDeduction = 0;
       let hasSupplierEarning = false;
+      const substitutes = [];
+
+      (ev.participants || []).forEach(p => {
+        if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
+          const pCurrency = p.currency || 'Shekel';
+          const substituteName = p.supplierId?.name || 'ספק לא ידוע';
+          const substituteRole = p.supplierId?.role || '';
+          substitutes.push({
+            name: substituteName,
+            role: substituteRole,
+            pay: p.expectedPay || 0,
+            currency: pCurrency
+          });
+          if (pCurrency === evCurrency) {
+            substituteDeduction += (p.expectedPay || 0);
+          }
+        }
+      });
 
       const linkedIds = partner.linkedSupplierIds ? partner.linkedSupplierIds.map(s => s._id.toString()) : [];
       (ev.participants || []).forEach(p => {
-        if (p.supplierId && linkedIds.includes(p.supplierId.toString())) {
+        if (p.supplierId && linkedIds.includes(p.supplierId._id?.toString() || p.supplierId.toString()) && !p.isSubstitute) {
           const pCurrency = p.currency || 'Shekel';
           if (pCurrency === evCurrency) {
              supplierEarnings += (p.expectedPay || 0);
@@ -131,7 +152,8 @@ router.get('/:id/report', async (req, res) => {
         }
       });
 
-      if (partnerShare > 0 || hasSupplierEarning) {
+      if (partnerShare > 0 || hasSupplierEarning || substituteDeduction > 0) {
+         const netEarning = partnerShare + supplierEarnings - substituteDeduction;
          eventsWithParticipant.push({
            _id: ev._id,
            title: ev.title,
@@ -139,10 +161,12 @@ router.get('/:id/report', async (req, res) => {
            location: ev.location,
            partnerShare,
            supplierEarnings,
-           expectedPay: partnerShare + supplierEarnings,
+           substituteDeduction,
+           substitutes,
+           expectedPay: netEarning,
            currency: evCurrency
          });
-         totalExpected[evCurrency] = (totalExpected[evCurrency] || 0) + partnerShare + supplierEarnings;
+         totalExpected[evCurrency] = (totalExpected[evCurrency] || 0) + netEarning;
       }
     });
 
@@ -160,12 +184,37 @@ router.get('/:id/report', async (req, res) => {
       totalPaid[pCurrency] = (totalPaid[pCurrency] || 0) + p.amount;
     });
 
+    // Budget deduction info for this partner
+    const Budget = require('../models/Budget');
+    const currentYear = new Date().getFullYear();
+    const budget = await Budget.findOne({ userId: partner.userId, year: currentYear });
+
+    let monthsElapsed = 0;
+    let monthlyBudgetDeduction = 0;
+    let totalBudgetDeduction = 0;
+
+    if (budget) {
+      const now = new Date();
+      monthsElapsed = now.getMonth() + 1;
+      if (now.getDate() < budget.deductionDay) {
+        monthsElapsed = Math.max(0, monthsElapsed - 1);
+      }
+      monthlyBudgetDeduction = Math.round((budget.amount / 12) * (partner.percentage / 100) * 100) / 100;
+      totalBudgetDeduction = Math.round(monthlyBudgetDeduction * monthsElapsed * 100) / 100;
+    }
+
     res.json({
       partner,
       events: eventsWithParticipant,
       payments,
       totalExpected,
-      totalPaid
+      totalPaid,
+      budgetInfo: {
+        budget,
+        monthlyBudgetDeduction,
+        totalBudgetDeduction,
+        monthsElapsed
+      }
     });
 
   } catch (error) {
