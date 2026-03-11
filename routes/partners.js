@@ -102,7 +102,9 @@ router.get('/:id/report', async (req, res) => {
 
     const Event = require('../models/Event');
     const Payment = require('../models/Payment');
-    const events = await Event.find({ userId: partner.userId }).sort({ date: -1 });
+    const events = await Event.find({ userId: partner.userId })
+      .populate('participants.supplierId', 'name role')
+      .sort({ date: -1 });
 
     const eventsWithParticipant = [];
     const totalExpected = { Shekel: 0, Dollar: 0, Euro: 0 };
@@ -119,11 +121,20 @@ router.get('/:id/report', async (req, res) => {
       let supplierEarnings = 0;
       let substituteDeduction = 0;
       let hasSupplierEarning = false;
+      const substitutes = []; // list of substitute suppliers for this partner in this event
 
-      // Deduct substitute costs that replace THIS partner
+      // Collect substitute info that replaces THIS partner
       (ev.participants || []).forEach(p => {
         if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
           const pCurrency = p.currency || 'Shekel';
+          const substituteName = p.supplierId?.name || 'ספק לא ידוע';
+          const substituteRole = p.supplierId?.role || '';
+          substitutes.push({
+            name: substituteName,
+            role: substituteRole,
+            pay: p.expectedPay || 0,
+            currency: pCurrency
+          });
           if (pCurrency === evCurrency) {
             substituteDeduction += (p.expectedPay || 0);
           }
@@ -132,7 +143,7 @@ router.get('/:id/report', async (req, res) => {
 
       const linkedIds = partner.linkedSupplierIds ? partner.linkedSupplierIds.map(s => s._id.toString()) : [];
       (ev.participants || []).forEach(p => {
-        if (p.supplierId && linkedIds.includes(p.supplierId.toString()) && !p.isSubstitute) {
+        if (p.supplierId && linkedIds.includes(p.supplierId._id?.toString() || p.supplierId.toString()) && !p.isSubstitute) {
           const pCurrency = p.currency || 'Shekel';
           if (pCurrency === evCurrency) {
              supplierEarnings += (p.expectedPay || 0);
@@ -153,6 +164,7 @@ router.get('/:id/report', async (req, res) => {
            partnerShare,
            supplierEarnings,
            substituteDeduction,
+           substitutes,
            expectedPay: netEarning,
            currency: evCurrency
          });
