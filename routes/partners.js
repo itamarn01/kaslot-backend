@@ -111,7 +111,6 @@ router.get('/:id/report', async (req, res) => {
     
     events.forEach(ev => {
       const evCurrency = ev.currency || 'Shekel';
-      // Only non-substitute suppliers reduce the shared profit pool
       const eventSupplierCosts = (ev.participants || [])
         .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
         .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
@@ -121,9 +120,8 @@ router.get('/:id/report', async (req, res) => {
       let supplierEarnings = 0;
       let substituteDeduction = 0;
       let hasSupplierEarning = false;
-      const substitutes = []; // list of substitute suppliers for this partner in this event
+      const substitutes = [];
 
-      // Collect substitute info that replaces THIS partner
       (ev.participants || []).forEach(p => {
         if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
           const pCurrency = p.currency || 'Shekel';
@@ -186,12 +184,37 @@ router.get('/:id/report', async (req, res) => {
       totalPaid[pCurrency] = (totalPaid[pCurrency] || 0) + p.amount;
     });
 
+    // Budget deduction info for this partner
+    const Budget = require('../models/Budget');
+    const currentYear = new Date().getFullYear();
+    const budget = await Budget.findOne({ userId: partner.userId, year: currentYear });
+
+    let monthsElapsed = 0;
+    let monthlyBudgetDeduction = 0;
+    let totalBudgetDeduction = 0;
+
+    if (budget) {
+      const now = new Date();
+      monthsElapsed = now.getMonth() + 1;
+      if (now.getDate() < budget.deductionDay) {
+        monthsElapsed = Math.max(0, monthsElapsed - 1);
+      }
+      monthlyBudgetDeduction = Math.round((budget.amount / 12) * (partner.percentage / 100) * 100) / 100;
+      totalBudgetDeduction = Math.round(monthlyBudgetDeduction * monthsElapsed * 100) / 100;
+    }
+
     res.json({
       partner,
       events: eventsWithParticipant,
       payments,
       totalExpected,
-      totalPaid
+      totalPaid,
+      budgetInfo: {
+        budget,
+        monthlyBudgetDeduction,
+        totalBudgetDeduction,
+        monthsElapsed
+      }
     });
 
   } catch (error) {

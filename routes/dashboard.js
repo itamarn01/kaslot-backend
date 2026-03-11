@@ -4,6 +4,7 @@ const Event = require('../models/Event');
 const Payment = require('../models/Payment');
 const Supplier = require('../models/Supplier');
 const Partner = require('../models/Partner');
+const Budget = require('../models/Budget');
 const { authMiddleware } = require('../middleware/auth');
 
 // All routes require authentication
@@ -54,6 +55,20 @@ router.get('/summary', async (req, res) => {
         Euro: totalEventsPrice.Euro - totalExpectedPay.Euro,
     };
 
+    // ----- Budget deduction logic -----
+    const currentYear = new Date().getFullYear();
+    const budget = await Budget.findOne({ userId: req.userId, year: currentYear });
+
+    // How many months of budget have been charged up to today
+    let monthsElapsed = 0;
+    if (budget) {
+      const now = new Date();
+      monthsElapsed = now.getMonth() + 1; // 1-based month (Jan=1)
+      if (now.getDate() < budget.deductionDay) {
+        monthsElapsed = Math.max(0, monthsElapsed - 1);
+      }
+    }
+
     const partners = await Partner.find({ userId: req.userId }).populate('linkedSupplierIds');
     const partnerEarnings = partners.map(partner => {
       let profitShare = { Shekel: 0, Dollar: 0, Euro: 0 };
@@ -62,7 +77,6 @@ router.get('/summary', async (req, res) => {
 
       events.forEach(ev => {
         const evCurrency = ev.currency || 'Shekel';
-        // Only non-substitute suppliers reduce the shared profit pool
         const eventSupplierCosts = (ev.participants || [])
           .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
           .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
@@ -70,7 +84,6 @@ router.get('/summary', async (req, res) => {
 
         profitShare[evCurrency] += eventProfit * (partner.percentage / 100);
 
-        // Deduct substitute costs that replace THIS partner
         (ev.participants || []).forEach(p => {
           if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
             const pCurrency = p.currency || 'Shekel';
@@ -89,6 +102,12 @@ router.get('/summary', async (req, res) => {
         }
       });
 
+      // Monthly budget deduction for this partner (charged months so far this year)
+      const monthlyBudgetDeduction = budget
+        ? (budget.amount / 12) * (partner.percentage / 100)
+        : 0;
+      const totalBudgetDeduction = Math.round(monthlyBudgetDeduction * monthsElapsed * 100) / 100;
+
       return {
         _id: partner._id,
         name: partner.name,
@@ -97,8 +116,10 @@ router.get('/summary', async (req, res) => {
         profitShare,
         supplierEarnings,
         substituteDeductions,
+        budgetDeduction: totalBudgetDeduction,
+        monthlyBudgetDeduction: Math.round(monthlyBudgetDeduction * 100) / 100,
         totalEarnings: {
-          Shekel: profitShare.Shekel + supplierEarnings.Shekel - substituteDeductions.Shekel,
+          Shekel: profitShare.Shekel + supplierEarnings.Shekel - substituteDeductions.Shekel - totalBudgetDeduction,
           Dollar: profitShare.Dollar + supplierEarnings.Dollar - substituteDeductions.Dollar,
           Euro: profitShare.Euro + supplierEarnings.Euro - substituteDeductions.Euro,
         }
@@ -113,7 +134,8 @@ router.get('/summary', async (req, res) => {
       totalProfit,
       totalOwed,
       estimatedFinalProfit,
-      partnerEarnings
+      partnerEarnings,
+      budget: budget || null
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
