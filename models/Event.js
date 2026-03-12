@@ -20,6 +20,11 @@ const EventSchema = new mongoose.Schema({
   phone_number: {
     type: String
   },
+  eventType: {
+    type: String,
+    enum: ['חתונה', 'בר/בת מצווה', 'צוות 1', 'צוות 2', 'אירוע עירייה', 'מופע', 'אחר'],
+    default: 'חתונה'
+  },
   totalPrice: {
     type: Number,
     required: true
