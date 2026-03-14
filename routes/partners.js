@@ -3,97 +3,6 @@ const router = express.Router();
 const Partner = require('../models/Partner');
 const { authMiddleware } = require('../middleware/auth');
 
-// All routes require authentication
-router.use(authMiddleware);
-
-// GET all partners (for current user)
-router.get('/', async (req, res) => {
-  try {
-    const partners = await Partner.find({ userId: req.userId }).populate('linkedSupplierIds');
-    res.json(partners);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// POST create partner
-router.post('/', async (req, res) => {
-  try {
-    const { name, percentage, linkedSupplierIds } = req.body;
-
-    // Validate total percentage won't exceed 100
-    const existingPartners = await Partner.find({ userId: req.userId });
-    const currentTotal = existingPartners.reduce((sum, p) => sum + p.percentage, 0);
-    if (currentTotal + percentage > 100) {
-      return res.status(400).json({
-        message: `לא ניתן להוסיף ${percentage}%. סה"כ נוכחי: ${currentTotal}%. מקסימום: ${100 - currentTotal}%`
-      });
-    }
-
-    const SupplierModel = require('../models/Supplier');
-    const autoLinkedSuppliers = await SupplierModel.find({ name: name, userId: req.userId });
-    const autoLinkedIds = autoLinkedSuppliers.map(s => s._id.toString());
-    
-    let combinedIds = Array.isArray(linkedSupplierIds) ? linkedSupplierIds.map(id => id.toString()) : [];
-    autoLinkedIds.forEach(id => {
-      if (!combinedIds.includes(id)) combinedIds.push(id);
-    });
-
-    const partner = new Partner({ name, percentage, linkedSupplierIds: combinedIds, userId: req.userId });
-    await partner.save();
-    const populated = await Partner.findById(partner._id).populate('linkedSupplierIds');
-    res.status(201).json(populated);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// PUT update partner
-router.put('/:id', async (req, res) => {
-  try {
-    const { name, percentage, linkedSupplierIds } = req.body;
-
-    const existingPartners = await Partner.find({ _id: { $ne: req.params.id }, userId: req.userId });
-    const currentTotal = existingPartners.reduce((sum, p) => sum + p.percentage, 0);
-    if (currentTotal + percentage > 100) {
-      return res.status(400).json({
-        message: `לא ניתן לעדכן ל-${percentage}%. סה"כ שותפים אחרים: ${currentTotal}%. מקסימום: ${100 - currentTotal}%`
-      });
-    }
-
-    const SupplierModel = require('../models/Supplier');
-    const autoLinkedSuppliers = await SupplierModel.find({ name: name, userId: req.userId });
-    const autoLinkedIds = autoLinkedSuppliers.map(s => s._id.toString());
-    
-    let combinedIds = Array.isArray(linkedSupplierIds) ? linkedSupplierIds.map(id => id.toString()) : [];
-    autoLinkedIds.forEach(id => {
-      if (!combinedIds.includes(id)) combinedIds.push(id);
-    });
-
-    const partner = await Partner.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId },
-      { name, percentage, linkedSupplierIds: combinedIds },
-      { new: true }
-    ).populate('linkedSupplierIds');
-
-    if (!partner) return res.status(404).json({ message: 'שותף לא נמצא' });
-    res.json(partner);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// DELETE partner
-router.delete('/:id', async (req, res) => {
-  try {
-    const partner = await Partner.findOneAndDelete({ _id: req.params.id, userId: req.userId });
-    if (!partner) return res.status(404).json({ message: 'שותף לא נמצא' });
-    res.json({ message: 'השותף נמחק בהצלחה' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // GET partner report (public for sharing)
 router.get('/:id/report', async (req, res) => {
   try {
@@ -221,5 +130,97 @@ router.get('/:id/report', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
+// All routes below require authentication
+router.use(authMiddleware);
+
+// GET all partners (for current user)
+router.get('/', async (req, res) => {
+  try {
+    const partners = await Partner.find({ userId: req.userId }).populate('linkedSupplierIds');
+    res.json(partners);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// POST create partner
+router.post('/', async (req, res) => {
+  try {
+    const { name, percentage, linkedSupplierIds } = req.body;
+
+    // Validate total percentage won't exceed 100
+    const existingPartners = await Partner.find({ userId: req.userId });
+    const currentTotal = existingPartners.reduce((sum, p) => sum + p.percentage, 0);
+    if (currentTotal + percentage > 100) {
+      return res.status(400).json({
+        message: `לא ניתן להוסיף ${percentage}%. סה"כ נוכחי: ${currentTotal}%. מקסימום: ${100 - currentTotal}%`
+      });
+    }
+
+    const SupplierModel = require('../models/Supplier');
+    const autoLinkedSuppliers = await SupplierModel.find({ name: name, userId: req.userId });
+    const autoLinkedIds = autoLinkedSuppliers.map(s => s._id.toString());
+    
+    let combinedIds = Array.isArray(linkedSupplierIds) ? linkedSupplierIds.map(id => id.toString()) : [];
+    autoLinkedIds.forEach(id => {
+      if (!combinedIds.includes(id)) combinedIds.push(id);
+    });
+
+    const partner = new Partner({ name, percentage, linkedSupplierIds: combinedIds, userId: req.userId });
+    await partner.save();
+    const populated = await Partner.findById(partner._id).populate('linkedSupplierIds');
+    res.status(201).json(populated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// PUT update partner
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, percentage, linkedSupplierIds } = req.body;
+
+    const existingPartners = await Partner.find({ _id: { $ne: req.params.id }, userId: req.userId });
+    const currentTotal = existingPartners.reduce((sum, p) => sum + p.percentage, 0);
+    if (currentTotal + percentage > 100) {
+      return res.status(400).json({
+        message: `לא ניתן לעדכן ל-${percentage}%. סה"כ שותפים אחרים: ${currentTotal}%. מקסימום: ${100 - currentTotal}%`
+      });
+    }
+
+    const SupplierModel = require('../models/Supplier');
+    const autoLinkedSuppliers = await SupplierModel.find({ name: name, userId: req.userId });
+    const autoLinkedIds = autoLinkedSuppliers.map(s => s._id.toString());
+    
+    let combinedIds = Array.isArray(linkedSupplierIds) ? linkedSupplierIds.map(id => id.toString()) : [];
+    autoLinkedIds.forEach(id => {
+      if (!combinedIds.includes(id)) combinedIds.push(id);
+    });
+
+    const partner = await Partner.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      { name, percentage, linkedSupplierIds: combinedIds },
+      { new: true }
+    ).populate('linkedSupplierIds');
+
+    if (!partner) return res.status(404).json({ message: 'שותף לא נמצא' });
+    res.json(partner);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// DELETE partner
+router.delete('/:id', async (req, res) => {
+  try {
+    const partner = await Partner.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+    if (!partner) return res.status(404).json({ message: 'שותף לא נמצא' });
+    res.json({ message: 'השותף נמחק בהצלחה' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 
 module.exports = router;
