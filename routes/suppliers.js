@@ -20,6 +20,8 @@ router.get('/:id/report', async (req, res) => {
         title: ev.title,
         date: ev.date,
         location: ev.location,
+        eventType: ev.eventType,
+        phone_number: ev.phone_number,
         expectedPay: participant ? participant.expectedPay : 0,
         currency: participant ? participant.currency : 'Shekel'
       };
