@@ -11,6 +11,7 @@ router.get('/:id/report', async (req, res) => {
 
     const Event = require('../models/Event');
     const Payment = require('../models/Payment');
+    const BandExpense = require('../models/BandExpense');
     const events = await Event.find({ userId: partner.userId })
       .populate('participants.supplierId', 'name role')
       .sort({ date: -1 });
@@ -88,9 +89,28 @@ router.get('/:id/report', async (req, res) => {
     }).populate('eventId', 'title date').sort({ date: -1 });
 
     const totalPaid = { Shekel: 0, Dollar: 0, Euro: 0 };
+    const totalDebt = { Shekel: 0, Dollar: 0, Euro: 0 };
     payments.forEach(p => {
       const pCurrency = p.currency || 'Shekel';
-      totalPaid[pCurrency] = (totalPaid[pCurrency] || 0) + p.amount;
+      if (p.direction === 'debt') {
+        totalDebt[pCurrency] = (totalDebt[pCurrency] || 0) + p.amount;
+      } else {
+        totalPaid[pCurrency] = (totalPaid[pCurrency] || 0) + p.amount;
+      }
+    });
+
+    // Linked band expenses for this partner
+    const linkedBandExpenses = await BandExpense.find({
+      userId: partner.userId,
+      $or: [
+        { linkedPartnerId: req.params.id },
+        { linkedSupplierId: { $in: linkedIds } }
+      ]
+    }).sort({ date: -1 });
+
+    const totalBandExpenses = { Shekel: 0 };
+    linkedBandExpenses.forEach(e => {
+      totalBandExpenses.Shekel = (totalBandExpenses.Shekel || 0) + e.amount;
     });
 
     // Budget deduction info for this partner
@@ -118,6 +138,9 @@ router.get('/:id/report', async (req, res) => {
       payments,
       totalExpected,
       totalPaid,
+      totalDebt,
+      linkedBandExpenses,
+      totalBandExpenses,
       budgetInfo: {
         budget,
         monthlyBudgetDeduction,

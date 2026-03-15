@@ -39,6 +39,11 @@ const PaymentSchema = new mongoose.Schema({
     enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Loan'],
     required: true
   },
+  direction: {
+    type: String,
+    enum: ['payment', 'debt'],
+    default: 'payment'
+  },
   date: {
     type: Date,
     default: Date.now

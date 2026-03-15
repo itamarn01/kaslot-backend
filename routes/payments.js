@@ -36,6 +36,21 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Update a payment
+router.put('/:id', async (req, res) => {
+  try {
+    const updated = await Payment.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!updated) return res.status(404).json({ message: 'תשלום לא נמצא' });
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 // Delete a payment
 router.delete('/:id', async (req, res) => {
   try {
