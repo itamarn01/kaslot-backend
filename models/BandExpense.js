@@ -28,6 +28,16 @@ const BandExpenseSchema = new mongoose.Schema({
   description: {
     type: String,
     required: true
+  },
+  linkedSupplierId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Supplier',
+    default: null
+  },
+  linkedPartnerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Partner',
+    default: null
   }
 }, { timestamps: true });
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const Supplier = require('../models/Supplier');
 const Payment = require('../models/Payment');
 const Event = require('../models/Event');
+const BandExpense = require('../models/BandExpense');
 const { authMiddleware } = require('../middleware/auth');
 
 // Get full supplier report (public - for sharing)
@@ -34,8 +35,24 @@ router.get('/:id/report', async (req, res) => {
     });
 
     const totalPaid = { Shekel: 0, Dollar: 0, Euro: 0 };
+    const totalDebt = { Shekel: 0, Dollar: 0, Euro: 0 };
     payments.forEach(p => {
-      totalPaid[p.currency] = (totalPaid[p.currency] || 0) + p.amount;
+      if (p.direction === 'debt') {
+        totalDebt[p.currency] = (totalDebt[p.currency] || 0) + p.amount;
+      } else {
+        totalPaid[p.currency] = (totalPaid[p.currency] || 0) + p.amount;
+      }
+    });
+
+    // Linked band expenses for this supplier
+    const linkedBandExpenses = await BandExpense.find({
+      userId: supplier.userId,
+      linkedSupplierId: req.params.id
+    }).sort({ date: -1 });
+
+    const totalBandExpenses = { Shekel: 0 };
+    linkedBandExpenses.forEach(e => {
+      totalBandExpenses.Shekel = (totalBandExpenses.Shekel || 0) + e.amount;
     });
 
     res.json({
@@ -43,7 +60,10 @@ router.get('/:id/report', async (req, res) => {
       events: eventsWithParticipant,
       payments,
       totalExpected,
-      totalPaid
+      totalPaid,
+      totalDebt,
+      linkedBandExpenses,
+      totalBandExpenses
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -78,7 +78,10 @@ router.get('/expenses', async (req, res) => {
         $lt: new Date(year + 1, 0, 1)
       };
     }
-    const expenses = await BandExpense.find(query).sort({ date: -1 });
+    const expenses = await BandExpense.find(query)
+      .populate('linkedSupplierId', 'name role')
+      .populate('linkedPartnerId', 'name')
+      .sort({ date: -1 });
     res.json(expenses);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -88,14 +91,16 @@ router.get('/expenses', async (req, res) => {
 // POST create expense
 router.post('/expenses', async (req, res) => {
   try {
-    const { amount, method, installments, date, description } = req.body;
+    const { amount, method, installments, date, description, linkedSupplierId, linkedPartnerId } = req.body;
     const expense = new BandExpense({
       userId: req.userId,
       amount,
       method,
       installments: installments || 1,
       date: date || new Date(),
-      description
+      description,
+      linkedSupplierId: linkedSupplierId || null,
+      linkedPartnerId: linkedPartnerId || null
     });
     await expense.save();
     res.status(201).json(expense);
@@ -107,10 +112,10 @@ router.post('/expenses', async (req, res) => {
 // PUT update expense
 router.put('/expenses/:id', async (req, res) => {
   try {
-    const { amount, method, installments, date, description } = req.body;
+    const { amount, method, installments, date, description, linkedSupplierId, linkedPartnerId } = req.body;
     const expense = await BandExpense.findOneAndUpdate(
       { _id: req.params.id, userId: req.userId },
-      { amount, method, installments, date, description },
+      { amount, method, installments, date, description, linkedSupplierId: linkedSupplierId || null, linkedPartnerId: linkedPartnerId || null },
       { new: true, runValidators: true }
     );
     if (!expense) return res.status(404).json({ message: 'הוצאה לא נמצאה' });
@@ -146,7 +151,10 @@ router.get('/summary', async (req, res) => {
         $gte: new Date(year, 0, 1),
         $lt: new Date(year + 1, 0, 1)
       }
-    }).sort({ date: -1 });
+    })
+      .populate('linkedSupplierId', 'name role')
+      .populate('linkedPartnerId', 'name')
+      .sort({ date: -1 });
 
     const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
     const budgetAmount = budget ? budget.amount : 0;
