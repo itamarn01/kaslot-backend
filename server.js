@@ -1,6 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const https = require('https');
+const http = require('http');
 require('dotenv').config();
 
 const app = express();
@@ -53,4 +55,18 @@ app.use('/api/client-payments', require('./routes/clientPayments'));
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  
+  // Keep-alive ping mechanism for Render (runs every 14 minutes)
+  const BACKEND_URL = process.env.BACKEND_URL;
+  if (BACKEND_URL) {
+    console.log(`Self-ping initialized for: ${BACKEND_URL}`);
+    setInterval(() => {
+      const protocol = BACKEND_URL.startsWith('https') ? https : http;
+      protocol.get(BACKEND_URL, (res) => {
+        console.log(`Self-ping status: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.error('Self-ping error:', err.message);
+      });
+    }, 14 * 60 * 1000); // 14 minutes
+  }
 });
