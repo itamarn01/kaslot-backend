@@ -58,7 +58,19 @@ const EventSchema = new mongoose.Schema({
       ref: 'Partner',
       default: null
     }
-  }]
+  }],
+  fromGoogleCalendar: {
+    type: Boolean,
+    default: false
+  },
+  googleCalendarEventId: {
+    type: String,
+    default: null
+  },
+  googleCalendarId: {
+    type: String,
+    default: null
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Event', EventSchema);
