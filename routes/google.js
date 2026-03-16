@@ -44,6 +44,7 @@ router.get('/auth-url', authMiddleware, (req, res) => {
   const oauth2Client = getOAuth2Client(req);
   const scopes = [
     'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/spreadsheets',
   ];
   const url = oauth2Client.generateAuthUrl({
