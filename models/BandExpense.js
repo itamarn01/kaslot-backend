@@ -13,7 +13,7 @@ const BandExpenseSchema = new mongoose.Schema({
   },
   method: {
     type: String,
-    enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Loan'],
+    enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Loan', 'Credit Card'],
     required: true
   },
   installments: {
