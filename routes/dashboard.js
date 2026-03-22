@@ -5,6 +5,7 @@ const Payment = require('../models/Payment');
 const Supplier = require('../models/Supplier');
 const Partner = require('../models/Partner');
 const Budget = require('../models/Budget');
+const ClientPayment = require('../models/ClientPayment');
 const { authMiddleware } = require('../middleware/auth');
 
 // All routes require authentication
@@ -37,8 +38,16 @@ router.get('/summary', async (req, res) => {
         totalPaymentsMade[pCurrency] += (p.amount || 0);
     });
 
+    // Client payments received (cash received from clients)
+    const clientPayments = await ClientPayment.find({ userId: req.userId });
+    const clientPaymentsReceived = { Shekel: 0, Dollar: 0, Euro: 0 };
+    clientPayments.forEach(cp => {
+      clientPaymentsReceived.Shekel += (cp.amount || 0);
+    });
+
+    // רווח קופה = מה שהתקבל מלקוחות פחות מה שנדרש לספקים/מוזיקאים
     const totalProfit = {
-        Shekel: totalEventsPrice.Shekel - totalPaymentsMade.Shekel,
+        Shekel: clientPaymentsReceived.Shekel - totalExpectedPay.Shekel,
         Dollar: totalEventsPrice.Dollar - totalPaymentsMade.Dollar,
         Euro: totalEventsPrice.Euro - totalPaymentsMade.Euro,
     };

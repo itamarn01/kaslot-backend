@@ -38,6 +38,19 @@ const BandExpenseSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Partner',
     default: null
+  },
+  receiptImageUrl: {
+    type: String,
+    default: null
+  },
+  receiptDriveFileId: {
+    type: String,
+    default: null
+  },
+  receiptRecipientPartnerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Partner',
+    default: null
   }
 }, { timestamps: true });
 

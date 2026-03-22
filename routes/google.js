@@ -46,6 +46,7 @@ router.get('/auth-url', authMiddleware, (req, res) => {
     'https://www.googleapis.com/auth/calendar.events',
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive.file',
   ];
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
