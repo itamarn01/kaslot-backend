@@ -73,7 +73,7 @@ router.post('/create-invoice', async (req, res) => {
       dueDate: dateStr,
       lang: 'he',
       currency: 'ILS',
-      vatType: 0, // ללא מע"מ
+      vatType: 1, // כולל מע"מ
       discount: { amount: 0, type: 'sum' },
       client: {
         name: clientName || 'לקוח',
@@ -85,7 +85,7 @@ router.post('/create-invoice', async (req, res) => {
           quantity: 1,
           price: amount,
           currency: 'ILS',
-          vatType: 0
+          vatType: 1
         }
       ],
       payment: [
