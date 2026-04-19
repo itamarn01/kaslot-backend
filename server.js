@@ -58,7 +58,7 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   
   // Keep-alive ping mechanism for Render (runs every 14 minutes)
-  const BACKEND_URL = process.env.BACKEND_URL;
+ /*  const BACKEND_URL = process.env.BACKEND_URL;
   if (BACKEND_URL) {
     console.log(`Self-ping initialized for: ${BACKEND_URL}`);
     setInterval(() => {
@@ -69,5 +69,5 @@ app.listen(PORT, () => {
         console.error('Self-ping error:', err.message);
       });
     }, 14 * 60 * 1000); // 14 minutes
-  }
+  } */
 });
