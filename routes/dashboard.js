@@ -91,7 +91,18 @@ router.get('/summary', async (req, res) => {
           .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
         const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
 
-        profitShare[evCurrency] += eventProfit * (partner.percentage / 100);
+        let effectivePercentage = partner.percentage;
+        if (ev.customPartners) {
+          if (!ev.participatingPartners || !ev.participatingPartners.map(id => id.toString()).includes(partner._id.toString())) {
+             effectivePercentage = 0;
+          } else {
+             const activePartners = partners.filter(p => ev.participatingPartners.map(id => id.toString()).includes(p._id.toString()));
+             const totalActivePercentage = activePartners.reduce((sum, p) => sum + p.percentage, 0);
+             effectivePercentage = totalActivePercentage > 0 ? (partner.percentage / totalActivePercentage) * 100 : 0;
+          }
+        }
+
+        profitShare[evCurrency] += eventProfit * (effectivePercentage / 100);
 
         (ev.participants || []).forEach(p => {
           if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
