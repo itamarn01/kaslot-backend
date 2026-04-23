@@ -12,6 +12,7 @@ router.get('/:id/report', async (req, res) => {
     const Event = require('../models/Event');
     const Payment = require('../models/Payment');
     const BandExpense = require('../models/BandExpense');
+    const allPartners = await Partner.find({ userId: partner.userId });
     const events = await Event.find({ userId: partner.userId })
       .populate('participants.supplierId', 'name role')
       .sort({ date: -1 });
@@ -26,7 +27,19 @@ router.get('/:id/report', async (req, res) => {
         .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
       const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
 
-      let partnerShare = eventProfit * (partner.percentage / 100);
+      let effectivePercentage = partner.percentage;
+      if (ev.customPartners) {
+         const participatingPartnerIds = ev.participatingPartners || [];
+         if (!participatingPartnerIds.map(id => id.toString()).includes(partner._id.toString())) {
+            effectivePercentage = 0;
+         } else {
+            const activePartners = allPartners.filter(p => participatingPartnerIds.map(id => id.toString()).includes(p._id.toString()));
+            const totalActivePercentage = activePartners.reduce((sum, p) => sum + p.percentage, 0);
+            effectivePercentage = totalActivePercentage > 0 ? (partner.percentage / totalActivePercentage) * 100 : 0;
+         }
+      }
+
+      let partnerShare = eventProfit * (effectivePercentage / 100);
       let supplierEarnings = 0;
       let substituteDeduction = 0;
       let hasSupplierEarning = false;
@@ -72,6 +85,8 @@ router.get('/:id/report', async (req, res) => {
            eventType: ev.eventType,
            phone_number: ev.phone_number,
            partnerShare,
+           effectivePercentage,
+           isCustom: ev.customPartners,
            supplierEarnings,
            substituteDeduction,
            substitutes,

@@ -59,6 +59,14 @@ const EventSchema = new mongoose.Schema({
       default: null
     }
   }],
+  customPartners: {
+    type: Boolean,
+    default: false
+  },
+  participatingPartners: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Partner'
+  }],
   fromGoogleCalendar: {
     type: Boolean,
     default: false
