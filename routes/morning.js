@@ -54,11 +54,12 @@ router.post('/token', async (req, res) => {
   }
 });
 
-// POST /api/morning/create-invoice - create an income receipt invoice
-// Body: { token, eventTitle, eventDate, amount, clientName }
+// POST /api/morning/create-invoice - create an invoice (tax invoice or tax invoice+receipt)
+// Body: { token, eventTitle, eventDate, amount, clientName, description, invoiceType }
+// invoiceType: 320 = חשבונית מס קבלה (default), 305 = חשבונית מס
 router.post('/create-invoice', async (req, res) => {
   try {
-    const { token, eventTitle, eventDate, amount, clientName, description } = req.body;
+    const { token, eventTitle, eventDate, amount, clientName, description, invoiceType } = req.body;
     if (!token || !amount) {
       return res.status(400).json({ message: 'חסרים פרטים הכרחיים' });
     }
@@ -66,14 +67,18 @@ router.post('/create-invoice', async (req, res) => {
     // Format date as YYYY-MM-DD
     const dateStr = eventDate ? new Date(eventDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
 
+    // invoiceType: 320 = חשבונית מס קבלה, 305 = חשבונית מס
+    const docType = invoiceType === 305 ? 305 : 320;
+
+    // Price is VAT-inclusive; vatType 0 = "included" (מחיר כולל מע"מ)
     const invoiceBody = {
       description: description || eventTitle || 'שירותי נגינה',
-      type: 320, // קבלה (Receipt)
+      type: docType,
       date: dateStr,
       dueDate: dateStr,
       lang: 'he',
       currency: 'ILS',
-      vatType: 1, // כולל מע"מ
+      vatType: 0, // 0 = price already includes VAT
       discount: { amount: 0, type: 'sum' },
       client: {
         name: clientName || 'לקוח',
@@ -85,18 +90,22 @@ router.post('/create-invoice', async (req, res) => {
           quantity: 1,
           price: amount,
           currency: 'ILS',
-          vatType: 1
+          vatType: 0 // 0 = price already includes VAT
         }
-      ],
-      payment: [
+      ]
+    };
+
+    // חשבונית מס קבלה (320) requires a payment array; חשבונית מס (305) does not
+    if (docType === 320) {
+      invoiceBody.payment = [
         {
           type: 1, // Bank transfer
           price: amount,
           currency: 'ILS',
           date: dateStr
         }
-      ]
-    };
+      ];
+    }
 
     const result = await morningPost('/documents', token, invoiceBody);
     if (result.status === 200 || result.status === 201) {
