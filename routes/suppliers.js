@@ -4,6 +4,7 @@ const Supplier = require('../models/Supplier');
 const Payment = require('../models/Payment');
 const Event = require('../models/Event');
 const BandExpense = require('../models/BandExpense');
+const ClientPayment = require('../models/ClientPayment');
 const { authMiddleware } = require('../middleware/auth');
 
 // Get full supplier report (public - for sharing)
@@ -57,9 +58,30 @@ router.get('/:id/report', async (req, res) => {
       totalBandExpenses.Shekel = (totalBandExpenses.Shekel || 0) + e.amount;
     });
 
+    // Detect cash weddings: events fully paid by client entirely in cash
+    const eventIds = events.map(ev => ev._id);
+    const clientPayments = await ClientPayment.find({ userId: supplier.userId, eventId: { $in: eventIds } });
+    const clientPaymentsByEvent = {};
+    clientPayments.forEach(cp => {
+      const evId = cp.eventId.toString();
+      if (!clientPaymentsByEvent[evId]) clientPaymentsByEvent[evId] = [];
+      clientPaymentsByEvent[evId].push(cp);
+    });
+    const evTotalPriceMap = {};
+    events.forEach(ev => { evTotalPriceMap[ev._id.toString()] = ev.totalPrice || 0; });
+
+    const eventsWithFlags = eventsWithParticipant.map(ev => {
+      const evId = ev._id.toString();
+      const evCPs = clientPaymentsByEvent[evId] || [];
+      const clientTotalPaid = evCPs.reduce((sum, p) => sum + p.amount, 0);
+      const clientBalance = evTotalPriceMap[evId] - clientTotalPaid;
+      const isCashWedding = evCPs.length > 0 && clientBalance <= 0 && evCPs.every(p => p.method === 'Cash');
+      return { ...ev, isCashWedding };
+    });
+
     res.json({
       supplier,
-      events: eventsWithParticipant,
+      events: eventsWithFlags,
       payments,
       totalExpected,
       totalPaid,
