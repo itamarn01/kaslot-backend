@@ -45,6 +45,15 @@ router.get('/summary', async (req, res) => {
       clientPaymentsReceived.Shekel += (cp.amount || 0);
     });
 
+    // Cash balance: cash received from clients minus cash paid to suppliers/partners
+    const cashFromClients = clientPayments
+      .filter(cp => cp.method === 'Cash')
+      .reduce((sum, cp) => sum + (cp.amount || 0), 0);
+    const cashToSuppliers = payments
+      .filter(p => p.method === 'Cash' && p.direction !== 'debt')
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+    const cashBalance = { fromClients: Math.round(cashFromClients), toSuppliers: Math.round(cashToSuppliers), net: Math.round(cashFromClients - cashToSuppliers) };
+
     // רווח קופה = מה שהתקבל מלקוחות פחות מה שנדרש לספקים/מוזיקאים
     const totalProfit = {
         Shekel: clientPaymentsReceived.Shekel - totalExpectedPay.Shekel,
@@ -155,7 +164,8 @@ router.get('/summary', async (req, res) => {
       totalOwed,
       estimatedFinalProfit,
       partnerEarnings,
-      budget: budget || null
+      budget: budget || null,
+      cashBalance
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
