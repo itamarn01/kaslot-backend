@@ -81,6 +81,15 @@ const EventSchema = new mongoose.Schema({
       enum: ['Shekel', 'Dollar', 'Euro'],
       default: 'Shekel'
     },
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    method: {
+      type: String,
+      enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Credit Card'],
+      default: 'Credit Card'
+    },
     supplierId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Supplier',
