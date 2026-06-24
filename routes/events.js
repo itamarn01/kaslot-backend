@@ -190,7 +190,7 @@ router.delete('/:id/expenses/:expenseId', async (req, res) => {
 // Update expense in event
 router.put('/:id/expenses/:expenseId', async (req, res) => {
   try {
-    const { description, amount, currency, supplierId, partnerId } = req.body;
+    const { description, amount, currency, date, method, supplierId, partnerId } = req.body;
     const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
@@ -200,6 +200,8 @@ router.put('/:id/expenses/:expenseId', async (req, res) => {
     if (description !== undefined) expense.description = description;
     if (amount !== undefined) expense.amount = amount;
     if (currency !== undefined) expense.currency = currency;
+    if (date !== undefined) expense.date = date || new Date();
+    if (method !== undefined) expense.method = method;
     if (supplierId !== undefined) expense.supplierId = supplierId || null;
     if (partnerId !== undefined) expense.partnerId = partnerId || null;
 

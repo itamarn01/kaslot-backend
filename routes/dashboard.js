@@ -107,7 +107,13 @@ router.get('/summary', async (req, res) => {
         const eventSupplierCosts = (ev.participants || [])
           .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
           .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
-        const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
+
+        // Total expenses not linked to this partner (these reduce the profit pool)
+        const unlinkedExpenses = (ev.expenses || [])
+          .filter(exp => !exp.partnerId && (exp.currency || 'Shekel') === evCurrency)
+          .reduce((sum, exp) => sum + (exp.amount || 0), 0);
+
+        const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts - unlinkedExpenses;
 
         let effectivePercentage = partner.percentage;
         if (ev.customPartners) {
@@ -128,6 +134,16 @@ router.get('/summary', async (req, res) => {
             substituteDeductions[pCurrency] += (p.expectedPay || 0);
           }
         });
+
+        // Linked expenses to this partner reduce the profit
+        const linkedPartnerExpenses = (ev.expenses || [])
+          .filter(exp => exp.partnerId && exp.partnerId.toString() === partner._id.toString())
+          .reduce((sum, exp) => {
+            const expCurrency = exp.currency || 'Shekel';
+            if (expCurrency === evCurrency) return sum + (exp.amount || 0);
+            return sum;
+          }, 0);
+        substituteDeductions[evCurrency] += linkedPartnerExpenses;
 
         if (partner.linkedSupplierIds && partner.linkedSupplierIds.length > 0) {
           const linkedIds = partner.linkedSupplierIds.map(s => s._id.toString());
