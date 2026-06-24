@@ -68,38 +68,13 @@ const EventSchema = new mongoose.Schema({
     ref: 'Partner'
   }],
   expenses: [{
-    description: {
-      type: String,
-      required: true
-    },
-    amount: {
-      type: Number,
-      required: true
-    },
-    currency: {
-      type: String,
-      enum: ['Shekel', 'Dollar', 'Euro'],
-      default: 'Shekel'
-    },
-    date: {
-      type: Date,
-      default: Date.now
-    },
-    method: {
-      type: String,
-      enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Credit Card'],
-      default: 'Credit Card'
-    },
-    supplierId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Supplier',
-      default: null
-    },
-    partnerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Partner',
-      default: null
-    }
+    description: { type: String, required: true },
+    amount: { type: Number, required: true },
+    currency: { type: String, enum: ['Shekel', 'Dollar', 'Euro'], default: 'Shekel' },
+    date: { type: Date, default: Date.now },
+    method: { type: String, enum: ['Cash', 'Bit', 'Paybox', 'Bank Transfer', 'Check', 'Credit Card'], default: 'Credit Card' },
+    supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null },
+    partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner', default: null }
   }],
   fromGoogleCalendar: {
     type: Boolean,

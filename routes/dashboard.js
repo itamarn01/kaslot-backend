@@ -66,20 +66,11 @@ router.get('/summary', async (req, res) => {
         Dollar: totalExpectedPay.Dollar - totalPaymentsMade.Dollar,
         Euro: totalExpectedPay.Euro - totalPaymentsMade.Euro,
     };
-
-    // Calculate total expenses by currency
-    const totalExpenses = { Shekel: 0, Dollar: 0, Euro: 0 };
-    events.forEach(ev => {
-      (ev.expenses || []).forEach(exp => {
-        const expCurrency = exp.currency || 'Shekel';
-        totalExpenses[expCurrency] += (exp.amount || 0);
-      });
-    });
-
+    
     const estimatedFinalProfit = {
-        Shekel: totalEventsPrice.Shekel - totalExpectedPay.Shekel - totalExpenses.Shekel,
-        Dollar: totalEventsPrice.Dollar - totalExpectedPay.Dollar - totalExpenses.Dollar,
-        Euro: totalEventsPrice.Euro - totalExpectedPay.Euro - totalExpenses.Euro,
+        Shekel: totalEventsPrice.Shekel - totalExpectedPay.Shekel,
+        Dollar: totalEventsPrice.Dollar - totalExpectedPay.Dollar,
+        Euro: totalEventsPrice.Euro - totalExpectedPay.Euro,
     };
 
     // ----- Budget deduction logic -----
@@ -101,19 +92,21 @@ router.get('/summary', async (req, res) => {
       let profitShare = { Shekel: 0, Dollar: 0, Euro: 0 };
       let supplierEarnings = { Shekel: 0, Dollar: 0, Euro: 0 };
       let substituteDeductions = { Shekel: 0, Dollar: 0, Euro: 0 };
+      let expenseReimbursements = { Shekel: 0, Dollar: 0, Euro: 0 };
 
       events.forEach(ev => {
         const evCurrency = ev.currency || 'Shekel';
         const eventSupplierCosts = (ev.participants || [])
           .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
           .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
-
-        // Total expenses not linked to this partner (these reduce the profit pool)
-        const unlinkedExpenses = (ev.expenses || [])
-          .filter(exp => !exp.partnerId && (exp.currency || 'Shekel') === evCurrency)
+        const totalEventExpenses = (ev.expenses || [])
           .reduce((sum, exp) => sum + (exp.amount || 0), 0);
+        const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts - totalEventExpenses;
 
-        const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts - unlinkedExpenses;
+        // Partner-linked expenses: band owes reimbursement to this partner
+        const partnerLinkedExpenses = (ev.expenses || [])
+          .filter(exp => exp.partnerId && exp.partnerId.toString() === partner._id.toString())
+          .reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
         let effectivePercentage = partner.percentage;
         if (ev.customPartners) {
@@ -127,6 +120,7 @@ router.get('/summary', async (req, res) => {
         }
 
         profitShare[evCurrency] += eventProfit * (effectivePercentage / 100);
+        expenseReimbursements[evCurrency] += partnerLinkedExpenses;
 
         (ev.participants || []).forEach(p => {
           if (p.isSubstitute && p.replacesPartnerId && p.replacesPartnerId.toString() === partner._id.toString()) {
@@ -134,16 +128,6 @@ router.get('/summary', async (req, res) => {
             substituteDeductions[pCurrency] += (p.expectedPay || 0);
           }
         });
-
-        // Linked expenses to this partner reduce the profit
-        const linkedPartnerExpenses = (ev.expenses || [])
-          .filter(exp => exp.partnerId && exp.partnerId.toString() === partner._id.toString())
-          .reduce((sum, exp) => {
-            const expCurrency = exp.currency || 'Shekel';
-            if (expCurrency === evCurrency) return sum + (exp.amount || 0);
-            return sum;
-          }, 0);
-        substituteDeductions[evCurrency] += linkedPartnerExpenses;
 
         if (partner.linkedSupplierIds && partner.linkedSupplierIds.length > 0) {
           const linkedIds = partner.linkedSupplierIds.map(s => s._id.toString());
@@ -170,12 +154,13 @@ router.get('/summary', async (req, res) => {
         profitShare,
         supplierEarnings,
         substituteDeductions,
+        expenseReimbursements,
         budgetDeduction: totalBudgetDeduction,
         monthlyBudgetDeduction: Math.round(monthlyBudgetDeduction * 100) / 100,
         totalEarnings: {
-          Shekel: profitShare.Shekel + supplierEarnings.Shekel - substituteDeductions.Shekel - totalBudgetDeduction,
-          Dollar: profitShare.Dollar + supplierEarnings.Dollar - substituteDeductions.Dollar,
-          Euro: profitShare.Euro + supplierEarnings.Euro - substituteDeductions.Euro,
+          Shekel: profitShare.Shekel + supplierEarnings.Shekel + expenseReimbursements.Shekel - substituteDeductions.Shekel - totalBudgetDeduction,
+          Dollar: profitShare.Dollar + supplierEarnings.Dollar + expenseReimbursements.Dollar - substituteDeductions.Dollar,
+          Euro: profitShare.Euro + supplierEarnings.Euro + expenseReimbursements.Euro - substituteDeductions.Euro,
         }
       };
     });
