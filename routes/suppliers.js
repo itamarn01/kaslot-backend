@@ -13,7 +13,9 @@ router.get('/:id/report', async (req, res) => {
     const supplier = await Supplier.findById(req.params.id);
     if (!supplier) return res.status(404).json({ message: 'Supplier not found' });
 
-    const events = await Event.find({ 'participants.supplierId': req.params.id, userId: supplier.userId }).sort({ date: -1 });
+    const events = await Event.find({ 'participants.supplierId': req.params.id, userId: supplier.userId })
+      .populate('expenses.supplierId', 'name')
+      .sort({ date: -1 });
     const eventsWithParticipant = events.map(ev => {
       const participant = ev.participants.find(p => p.supplierId.toString() === req.params.id);
       return {
@@ -58,6 +60,29 @@ router.get('/:id/report', async (req, res) => {
       totalBandExpenses.Shekel = (totalBandExpenses.Shekel || 0) + e.amount;
     });
 
+    // Linked event expenses (supplier paid from pocket → band owes reimbursement)
+    const linkedEventExpenses = [];
+    events.forEach(ev => {
+      (ev.expenses || []).forEach(exp => {
+        const expSupplierId = (exp.supplierId?._id || exp.supplierId)?.toString();
+        if (expSupplierId === req.params.id) {
+          linkedEventExpenses.push({
+            _id: exp._id,
+            description: exp.description,
+            amount: exp.amount,
+            date: exp.date,
+            currency: exp.currency || 'Shekel',
+            eventTitle: ev.title
+          });
+        }
+      });
+    });
+    const totalEventExpenseReimbursements = { Shekel: 0, Dollar: 0, Euro: 0 };
+    linkedEventExpenses.forEach(exp => {
+      const cur = exp.currency || 'Shekel';
+      totalEventExpenseReimbursements[cur] = (totalEventExpenseReimbursements[cur] || 0) + (exp.amount || 0);
+    });
+
     // Detect cash weddings: events fully paid by client entirely in cash
     const eventIds = events.map(ev => ev._id);
     const clientPayments = await ClientPayment.find({ userId: supplier.userId, eventId: { $in: eventIds } });
@@ -87,7 +112,9 @@ router.get('/:id/report', async (req, res) => {
       totalPaid,
       totalDebt,
       linkedBandExpenses,
-      totalBandExpenses
+      totalBandExpenses,
+      linkedEventExpenses,
+      totalEventExpenseReimbursements
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

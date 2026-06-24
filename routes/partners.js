@@ -15,6 +15,7 @@ router.get('/:id/report', async (req, res) => {
     const allPartners = await Partner.find({ userId: partner.userId });
     const events = await Event.find({ userId: partner.userId })
       .populate('participants.supplierId', 'name role')
+      .populate('expenses.partnerId', 'name')
       .sort({ date: -1 });
 
     const eventsWithParticipant = [];
@@ -25,7 +26,8 @@ router.get('/:id/report', async (req, res) => {
       const eventSupplierCosts = (ev.participants || [])
         .filter(p => !p.isSubstitute && (p.currency || 'Shekel') === evCurrency)
         .reduce((sum, p) => sum + (p.expectedPay || 0), 0);
-      const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts;
+      const totalEventExpenses = (ev.expenses || []).reduce((sum, exp) => sum + (exp.amount || 0), 0);
+      const eventProfit = (ev.totalPrice || 0) - eventSupplierCosts - totalEventExpenses;
 
       let effectivePercentage = partner.percentage;
       if (ev.customPartners) {
@@ -95,6 +97,29 @@ router.get('/:id/report', async (req, res) => {
          });
          totalExpected[evCurrency] = (totalExpected[evCurrency] || 0) + netEarning;
       }
+    });
+
+    // Partner-linked event expenses (reimbursements for expenses paid from pocket)
+    const linkedEventExpenses = [];
+    events.forEach(ev => {
+      (ev.expenses || []).forEach(exp => {
+        const expPartnerId = (exp.partnerId?._id || exp.partnerId)?.toString();
+        if (expPartnerId === partner._id.toString()) {
+          linkedEventExpenses.push({
+            _id: exp._id,
+            description: exp.description,
+            amount: exp.amount,
+            date: exp.date,
+            currency: exp.currency || 'Shekel',
+            eventTitle: ev.title
+          });
+        }
+      });
+    });
+    const totalEventExpenseReimbursements = { Shekel: 0, Dollar: 0, Euro: 0 };
+    linkedEventExpenses.forEach(exp => {
+      const cur = exp.currency || 'Shekel';
+      totalEventExpenseReimbursements[cur] = (totalEventExpenseReimbursements[cur] || 0) + (exp.amount || 0);
     });
 
     // Detect cash weddings: events fully paid by client entirely in cash
@@ -180,6 +205,8 @@ router.get('/:id/report', async (req, res) => {
       totalDebt,
       linkedBandExpenses,
       totalBandExpenses,
+      linkedEventExpenses,
+      totalEventExpenseReimbursements,
       budgetInfo: {
         budget,
         monthlyBudgetDeduction,
