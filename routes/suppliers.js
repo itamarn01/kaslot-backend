@@ -58,6 +58,23 @@ router.get('/:id/report', async (req, res) => {
       totalBandExpenses.Shekel = (totalBandExpenses.Shekel || 0) + e.amount;
     });
 
+    // Expenses linked to this supplier (appear as debt to the supplier)
+    const linkedExpenses = [];
+    events.forEach(ev => {
+      (ev.expenses || []).forEach(exp => {
+        if (exp.supplierId && exp.supplierId.toString() === req.params.id) {
+          linkedExpenses.push({
+            description: exp.description,
+            amount: exp.amount,
+            currency: exp.currency,
+            eventId: ev._id,
+            eventTitle: ev.title
+          });
+          totalDebt[exp.currency] = (totalDebt[exp.currency] || 0) + exp.amount;
+        }
+      });
+    });
+
     // Detect cash weddings: events fully paid by client entirely in cash
     const eventIds = events.map(ev => ev._id);
     const clientPayments = await ClientPayment.find({ userId: supplier.userId, eventId: { $in: eventIds } });
@@ -87,7 +104,8 @@ router.get('/:id/report', async (req, res) => {
       totalPaid,
       totalDebt,
       linkedBandExpenses,
-      totalBandExpenses
+      totalBandExpenses,
+      linkedExpenses
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -66,11 +66,20 @@ router.get('/summary', async (req, res) => {
         Dollar: totalExpectedPay.Dollar - totalPaymentsMade.Dollar,
         Euro: totalExpectedPay.Euro - totalPaymentsMade.Euro,
     };
-    
+
+    // Calculate total expenses by currency
+    const totalExpenses = { Shekel: 0, Dollar: 0, Euro: 0 };
+    events.forEach(ev => {
+      (ev.expenses || []).forEach(exp => {
+        const expCurrency = exp.currency || 'Shekel';
+        totalExpenses[expCurrency] += (exp.amount || 0);
+      });
+    });
+
     const estimatedFinalProfit = {
-        Shekel: totalEventsPrice.Shekel - totalExpectedPay.Shekel,
-        Dollar: totalEventsPrice.Dollar - totalExpectedPay.Dollar,
-        Euro: totalEventsPrice.Euro - totalExpectedPay.Euro,
+        Shekel: totalEventsPrice.Shekel - totalExpectedPay.Shekel - totalExpenses.Shekel,
+        Dollar: totalEventsPrice.Dollar - totalExpectedPay.Dollar - totalExpenses.Dollar,
+        Euro: totalEventsPrice.Euro - totalExpectedPay.Euro - totalExpenses.Euro,
     };
 
     // ----- Budget deduction logic -----
