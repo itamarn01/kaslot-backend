@@ -12,6 +12,8 @@ router.get('/', async (req, res) => {
   try {
     const events = await Event.find({ userId: req.userId })
       .populate('participants.supplierId', 'name role')
+      .populate('expenses.supplierId', 'name')
+      .populate('expenses.partnerId', 'name')
       .sort({ date: -1 });
     res.json(events);
   } catch (error) {
@@ -23,7 +25,9 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const event = await Event.findOne({ _id: req.params.id, userId: req.userId })
-      .populate('participants.supplierId', 'name role contact_info');
+      .populate('participants.supplierId', 'name role contact_info')
+      .populate('expenses.supplierId', 'name')
+      .populate('expenses.partnerId', 'name');
     if (!event) return res.status(404).json({ message: 'Event not found' });
     res.json(event);
   } catch (error) {
@@ -130,6 +134,85 @@ router.put('/:id/participants/:supplierId', async (req, res) => {
     await event.save();
     
     const updatedEvent = await Event.findById(req.params.id).populate('participants.supplierId', 'name role');
+    res.json(updatedEvent);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Add expense to event
+router.post('/:id/expenses', async (req, res) => {
+  try {
+    const { description, amount, currency, date, method, supplierId, partnerId } = req.body;
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    const expenseData = {
+      description,
+      amount,
+      currency: currency || 'Shekel',
+      date: date || new Date(),
+      method: method || 'Credit Card',
+      supplierId: supplierId || null,
+      partnerId: partnerId || null
+    };
+
+    event.expenses.push(expenseData);
+    await event.save();
+
+    const updatedEvent = await Event.findById(req.params.id)
+      .populate('participants.supplierId', 'name role')
+      .populate('expenses.supplierId', 'name')
+      .populate('expenses.partnerId', 'name');
+    res.json(updatedEvent);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Update expense in event
+router.put('/:id/expenses/:expenseId', async (req, res) => {
+  try {
+    const { description, amount, currency, date, method, supplierId, partnerId } = req.body;
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    const expense = event.expenses.find(e => e._id.toString() === req.params.expenseId);
+    if (!expense) return res.status(404).json({ message: 'Expense not found' });
+
+    if (description !== undefined) expense.description = description;
+    if (amount !== undefined) expense.amount = amount;
+    if (currency !== undefined) expense.currency = currency;
+    if (date !== undefined) expense.date = date || new Date();
+    if (method !== undefined) expense.method = method;
+    if (supplierId !== undefined) expense.supplierId = supplierId || null;
+    if (partnerId !== undefined) expense.partnerId = partnerId || null;
+
+    await event.save();
+
+    const updatedEvent = await Event.findById(req.params.id)
+      .populate('participants.supplierId', 'name role')
+      .populate('expenses.supplierId', 'name')
+      .populate('expenses.partnerId', 'name');
+    res.json(updatedEvent);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// Remove expense from event
+router.delete('/:id/expenses/:expenseId', async (req, res) => {
+  try {
+    const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
+    if (!event) return res.status(404).json({ message: 'Event not found' });
+
+    event.expenses = event.expenses.filter(e => e._id.toString() !== req.params.expenseId);
+    await event.save();
+
+    const updatedEvent = await Event.findById(req.params.id)
+      .populate('participants.supplierId', 'name role')
+      .populate('expenses.supplierId', 'name')
+      .populate('expenses.partnerId', 'name');
     res.json(updatedEvent);
   } catch (error) {
     res.status(400).json({ message: error.message });
