@@ -143,7 +143,7 @@ router.put('/:id/participants/:supplierId', async (req, res) => {
 // Add expense to event
 router.post('/:id/expenses', async (req, res) => {
   try {
-    const { description, amount, currency, supplierId, partnerId } = req.body;
+    const { description, amount, currency, date, method, supplierId, partnerId } = req.body;
     const event = await Event.findOne({ _id: req.params.id, userId: req.userId });
     if (!event) return res.status(404).json({ message: 'Event not found' });
 
@@ -151,6 +151,8 @@ router.post('/:id/expenses', async (req, res) => {
       description,
       amount,
       currency: currency || 'Shekel',
+      date: date || new Date(),
+      method: method || 'Credit Card',
       supplierId: supplierId || null,
       partnerId: partnerId || null
     };
