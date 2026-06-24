@@ -152,6 +152,24 @@ router.get('/:id/report', async (req, res) => {
       totalBandExpenses.Shekel = (totalBandExpenses.Shekel || 0) + e.amount;
     });
 
+    // Expenses linked to this partner (appear as debt to the partner)
+    const linkedExpenses = [];
+    events.forEach(ev => {
+      (ev.expenses || []).forEach(exp => {
+        if (exp.partnerId && exp.partnerId.toString() === req.params.id) {
+          linkedExpenses.push({
+            description: exp.description,
+            amount: exp.amount,
+            currency: exp.currency,
+            eventId: ev._id,
+            eventTitle: ev.title
+          });
+          const expCurrency = exp.currency || 'Shekel';
+          totalDebt[expCurrency] = (totalDebt[expCurrency] || 0) + exp.amount;
+        }
+      });
+    });
+
     // Budget deduction info for this partner
     const Budget = require('../models/Budget');
     const currentYear = new Date().getFullYear();
@@ -180,6 +198,7 @@ router.get('/:id/report', async (req, res) => {
       totalDebt,
       linkedBandExpenses,
       totalBandExpenses,
+      linkedExpenses,
       budgetInfo: {
         budget,
         monthlyBudgetDeduction,
