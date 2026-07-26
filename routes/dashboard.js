@@ -13,8 +13,12 @@ router.use(authMiddleware);
 
 router.get('/summary', async (req, res) => {
   try {
-    const events = await Event.find({ userId: req.userId });
-    
+    // Future events are a planning projection only: excluded from every summary figure
+    // (turnover, supplier debt, cash profit, partner earnings) until their date arrives.
+    const nowForEvents = new Date();
+    const todayEnd = new Date(nowForEvents.getFullYear(), nowForEvents.getMonth(), nowForEvents.getDate(), 23, 59, 59, 999);
+    const events = await Event.find({ userId: req.userId, date: { $lte: todayEnd } });
+
     const totalEventsPrice = { Shekel: 0, Dollar: 0, Euro: 0 };
     const totalExpectedPay = { Shekel: 0, Dollar: 0, Euro: 0 };
     

@@ -13,7 +13,11 @@ router.get('/:id/report', async (req, res) => {
     const Payment = require('../models/Payment');
     const BandExpense = require('../models/BandExpense');
     const allPartners = await Partner.find({ userId: partner.userId });
-    const events = await Event.find({ userId: partner.userId })
+    // Future events are planning-only: excluded from the report until their date arrives
+    const now = new Date();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const events = await Event.find({ userId: partner.userId, date: { $lte: todayEnd } })
       .populate('participants.supplierId', 'name role')
       .populate('expenses.partnerId', 'name')
       .sort({ date: -1 });
