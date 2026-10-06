@@ -13,14 +13,15 @@ router.get('/:id/report', async (req, res) => {
     const supplier = await Supplier.findById(req.params.id);
     if (!supplier) return res.status(404).json({ message: 'Supplier not found' });
 
-    // Future events are planning-only: excluded from the report until their date arrives
+    // Future and hidden events are planning-only: excluded from the report
     const now = new Date();
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     const events = await Event.find({
       'participants.supplierId': req.params.id,
       userId: supplier.userId,
-      date: { $lte: todayEnd }
+      date: { $lte: todayEnd },
+      hidden: { $ne: true }
     })
       .populate('expenses.supplierId', 'name')
       .sort({ date: -1 });

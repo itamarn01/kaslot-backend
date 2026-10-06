@@ -76,6 +76,12 @@ const EventSchema = new mongoose.Schema({
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', default: null },
     partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Partner', default: null }
   }],
+  // Hidden events behave like future events: shown in the events list only,
+  // excluded from reports, balances and payments until un-hidden
+  hidden: {
+    type: Boolean,
+    default: false
+  },
   fromGoogleCalendar: {
     type: Boolean,
     default: false
